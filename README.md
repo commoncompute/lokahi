@@ -47,6 +47,8 @@ compiler-plan candidates, hashed experiment history and a replaceable Astra
 proposer/critic. Its control flow is tested with synthetic fixtures; the
 physical model baseline is currently blocked by the 40 GiB internal-SSD
 reserve. No measured candidate win or production promotion is claimed.
+The [October 3 validation report](docs/experiments/MIKI_BOOTSTRAP_20261003.md)
+records the test/build results and both preserved admission failures.
 Run it from the validated source checkout using
 `PYTHONPATH=src .venv/bin/python -m miki system-info`; do not install new
 dependencies implicitly. Existing native/ANE work and MLX fallback are retained.
