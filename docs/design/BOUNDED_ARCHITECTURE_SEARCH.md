@@ -125,3 +125,25 @@ then the pinned local 0.6B canary's complete requests with current-run MLX.
 Preserve failed receipts and descriptive Pareto frontiers; all candidates stay
 unpromoted. This implements a bounded experimental evaluator, not the full
 autonomous proposer, independent native engine or serving route registry.
+
+## October 3 Miki controller bootstrap
+
+[Miki's empirical loop](MIKI_EMPIRICAL_LOOP.md) now supplies a project-local
+protected controller, append-only history, read-only Astra proposal contract,
+isolated manifest-only candidates, repeatable fresh-process measurements and
+deterministic accept/reject/inconclusive/invalid outcomes. Source is temporarily
+in the approved internal recovery checkout while the replacement HDD is absent;
+the failed HDD remains forbidden. The user-approved X9 holds artifacts/archives,
+not active SQLite/Git or a substitute for the 40 GiB internal reserve.
+
+Its first bounded family is **native MLX compiler execution plans over unchanged
+dense Q4 MLPs**, not newly generated Metal/ANE source. Every candidate must beat
+both its verified parent and unchanged MLX-LM. The 2% exploratory threshold may
+retain a local research checkpoint only; it does not replace the production
+1.25x prefill/decode and other full-runtime gates above.
+
+Offline and synthetic loop tests pass. A real-model baseline is blocked by the
+SSD reserve, so no Astra proposal, real candidate win, complete ANE integration,
+SSD paging, or runtime promotion is claimed. Future source-level kernel search
+must add its own reviewed native compiler/source allowlist without allowing
+changes to benchmark/oracle/workload/statistics/test gates.

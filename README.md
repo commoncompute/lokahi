@@ -41,6 +41,16 @@ The recovered work includes Objective-C direct-ANE experiments, C/ARM64 NEON
 layout kernels, and a C++ capacity planner. The new evidence is component-level;
 it does **not** establish a full-model win over MLX-LM or Darkbloom.
 
+The [Miki empirical-loop bootstrap](docs/design/MIKI_EMPIRICAL_LOOP.md) adds a
+bounded local optimizer with protected correctness/performance gates, isolated
+compiler-plan candidates, hashed experiment history and a replaceable Astra
+proposer/critic. Its control flow is tested with synthetic fixtures; the
+physical model baseline is currently blocked by the 40 GiB internal-SSD
+reserve. No measured candidate win or production promotion is claimed.
+Run it from the validated source checkout using
+`PYTHONPATH=src .venv/bin/python -m miki system-info`; do not install new
+dependencies implicitly. Existing native/ANE work and MLX fallback are retained.
+
 ## Current verified baseline
 
 The offline test suite and serialized local M1 probes currently verify:

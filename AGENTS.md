@@ -2,6 +2,8 @@
 
 Strata is an Apple-Silicon LLM inference runtime and learning laboratory. Keep
 the Python import namespace `ollm` until a dedicated compatibility migration.
+Miki (`src/miki`) is its experimental empirical optimizer, not a renamed or
+qualified CommonCompute serving runtime.
 
 ## Engineering boundaries
 
@@ -18,14 +20,41 @@ the Python import namespace `ollm` until a dedicated compatibility migration.
 - Use generated small fixtures before real model weights.
 - The external HDD failed. Do not access `/Volumes/Tyler HDD`, including through
   preserved symlinks. The approved source checkout is
-  `/Volumes/Tyler HDD 6TB/strata`, on the user-approved replacement drive.
-  `/Users/tylergee/Documents/strata-recovered` remains the validated internal-SSD
-  environment. The approved model root is
+  `/Users/tylergee/Documents/strata-recovered` while the replacement 6 TB drive
+  is unmounted. Never overwrite another checkout when it returns. The model root is
   `/Users/tylergee/Library/Application Support/Strata/models`; keep builds,
   caches and performance storage on the internal SSD. Other contributors must
   choose their own SSD locations.
   Keep a 40 GiB free-space reserve for local experiments. SSD placement does
   not by itself qualify production model paging.
+  The user approved `/Volumes/X9 Pro/Strata-Miki` for project artifacts. It is
+  exFAT: keep Git worktrees, Python, native builds and SQLite on internal APFS.
+  Do not format the X9, move unrelated data, or substitute its free space for
+  the protected internal-SSD reserve.
+
+## Miki empirical loop
+
+- Correctness precedes performance. LLMs propose and critique; protected native
+  workers and deterministic software measure, judge and retain local checkpoints.
+- Freeze evaluation infrastructure in a clean local commit before evolving.
+  Candidates may change only `miki_candidate.json` in isolated Git worktrees.
+  Benchmark logic, references, workloads, statistics, test expectations, policy,
+  controller and history are not optimization targets. Changes invalidate a run.
+- Preserve failures, inconclusive results, candidate diffs and raw hashed records.
+  Never rewrite historical evidence. Keep SQLite/history private and append-only.
+- Require real physical macOS hardware, matched artifact/software identities,
+  3 warmups, at least 10 interleaved pairs, independent fresh-process replication,
+  fixed correctness limits and the protected noise/memory/confidence gates.
+  No simulated-chip, microbenchmark-only, fallback-only or native-language win.
+- The initial 2% Miki acceptance threshold applies only to local experimental
+  plans. It does not weaken Strata's full-runtime production/fleet gates.
+- Native/private ANE, AMX and cross-device work remain separate research lanes.
+  Record source URL, revision/license and documented/reported/measured/inferred
+  status. Never redistribute proprietary Apple binaries, firmware or code.
+- Keep evolution finite, serialized and interruptible. Stop on resource guards,
+  instability or budgets; never change machine-wide security/firmware settings.
+- Research providers are replaceable. Astra is the initial configured proposer;
+  model inference itself must remain offline and independent of that provider.
 
 ## Evidence rules
 
