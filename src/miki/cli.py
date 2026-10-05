@@ -12,6 +12,7 @@ def main():
     parser.add_argument('--artifacts', type=Path, default=Path.home() / 'Library/Application Support/Strata/miki/artifacts')
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('system-info')
+    commands.add_parser('family-plan')
     baseline = commands.add_parser('baseline')
     baseline.add_argument('model', choices=('Llama-3.2-3B-Instruct-4bit', 'Qwen3-0.6B-4bit'))
     experiment = commands.add_parser('experiment')
@@ -28,6 +29,11 @@ def main():
     args = parser.parse_args()
     if args.command == 'system-info':
         print(json.dumps(system_info(), indent=2))
+        return 0
+    if args.command == 'family-plan':
+        from .bench.families import local_plan
+        from benchmarks.recovered_mlx_baseline import ROOT as model_root
+        print(json.dumps(local_plan(system_info()['memory_bytes'], model_root), indent=2))
         return 0
     from .experiments.database import History, new_id
     from .experiments.artifacts import Artifacts

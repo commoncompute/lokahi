@@ -63,6 +63,12 @@ Node FFI, XPC service or speedup. See the
 [integration boundary](integrations/commoncompute/native-session-v1/README.md)
 and [validation/migration report](docs/experiments/MIKI_NATIVE_FOUNDATION_20261005.md).
 
+The [small-family canary ladder](docs/design/SMALL_FAMILY_CANARIES.md) and
+`miki family-plan` map the 16 GiB M1 test scope to CommonCompute's pinned model
+catalog. Small-model wins do not automatically transfer to larger models or
+chips; native DeepSeek/GLM/GPT-OSS paths remain separately gated. The planner
+does not download weights, qualify performance or widen the optimizer allowlist.
+
 ## Current verified baseline
 
 The offline test suite and serialized local M1 probes currently verify:
