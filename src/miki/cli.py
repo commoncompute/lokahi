@@ -12,16 +12,18 @@ def main():
     parser.add_argument('--artifacts', type=Path, default=Path.home() / 'Library/Application Support/Strata/miki/artifacts')
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('system-info')
-    commands.add_parser('family-plan')
+    family = commands.add_parser('family-plan')
+    family.add_argument('--catalog', type=Path, help='read-only generated CommonCompute mlxCatalog.gen.ts')
+    from .bench.families import BASELINE_MODELS, EVOLVE_MODELS
     baseline = commands.add_parser('baseline')
-    baseline.add_argument('model', choices=('Llama-3.2-3B-Instruct-4bit', 'Qwen3-0.6B-4bit'))
+    baseline.add_argument('model', choices=sorted(BASELINE_MODELS))
     experiment = commands.add_parser('experiment')
     actions = experiment.add_subparsers(dest='action', required=True)
     for action in ('show', 'reproduce', 'lineage'):
         sub = actions.add_parser(action)
         sub.add_argument('id')
     evolve = commands.add_parser('evolve')
-    evolve.add_argument('model', choices=('Llama-3.2-3B-Instruct-4bit', 'Qwen3-0.6B-4bit'))
+    evolve.add_argument('model', choices=sorted(EVOLVE_MODELS))
     evolve.add_argument('--objective', choices=('decode', 'ttft'), default='decode')
     evolve.add_argument('--population', type=int, choices=(1, 2, 3), default=3)
     evolve.add_argument('--generations', type=int, choices=(1, 2), default=2)
@@ -33,7 +35,12 @@ def main():
     if args.command == 'family-plan':
         from .bench.families import local_plan
         from benchmarks.recovered_mlx_baseline import ROOT as model_root
-        print(json.dumps(local_plan(system_info()['memory_bytes'], model_root), indent=2))
+        memory = system_info()['memory_bytes']
+        result = local_plan(memory, model_root)
+        if args.catalog:
+            from .bench.catalog_coverage import read_coverage
+            result['catalog_coverage'] = read_coverage(args.catalog, memory)
+        print(json.dumps(result, indent=2))
         return 0
     from .experiments.database import History, new_id
     from .experiments.artifacts import Artifacts

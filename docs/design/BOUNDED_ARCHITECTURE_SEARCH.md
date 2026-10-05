@@ -1,6 +1,6 @@
 # Bounded native architecture search: internal-SSD recovery iteration
 
-Status: **experimental implementation and measured components; no promoted native full-model runtime**. Updated 2026-09-30. The complete target topology is in [STRATA_NATIVE_RUNTIME_V2.md](STRATA_NATIVE_RUNTIME_V2.md). Historical measurements and failures are in [the recovery report](../experiments/RECOVERY_NATIVE_PREFILL_20260907.md). The current bounded step is [catalog and native latency work](../experiments/CATALOG_NATIVE_LATENCY_20260930.md).
+Status: **experimental implementation and measured components; no promoted native full-model runtime**. Updated 2026-10-05. The complete target topology is in [STRATA_NATIVE_RUNTIME_V2.md](STRATA_NATIVE_RUNTIME_V2.md). Historical measurements and failures are in [the recovery report](../experiments/RECOVERY_NATIVE_PREFILL_20260907.md). The current bounded step combines [catalog/native latency work](../experiments/CATALOG_NATIVE_LATENCY_20260930.md), [small-family coverage](SMALL_FAMILY_CANARIES.md) and [the Miki empirical loop](MIKI_EMPIRICAL_LOOP.md).
 
 ## Authority and evidence
 
@@ -17,7 +17,7 @@ This checkout starts from recovered remote commit `4ecda436ef2e5048c8272512d53c8
 5. **SSD capacity track:** `ssd_offload=disabled` by default. Do not mix paging and resident speed claims. Before paging experiments, require an approved internal-SSD path, at least 40 GiB free-space reserve, bounded bytes outstanding, artifact identities, admission accounting, and measured page/staging stalls. SSD is storage, not execution memory. No new production pager is implemented by this iteration.
 6. **Wrappers after native contracts:** C ABI over the native runtime, then Python, TypeScript, and Swift clients. The current Python scripts stage fixed fixtures and record measurements; the new ANE math and tensor copies execute in Objective-C/C. No production Swift/TypeScript FFN serving wrapper exists yet.
 
-The dead `/Volumes/Tyler HDD` is excluded from all I/O, including preserved symlinks. The user-approved replacement source checkout is `/Volumes/Tyler HDD 6TB/strata`; models, builds, caches and performance-sensitive storage remain on approved internal-SSD paths.
+The dead `/Volumes/Tyler HDD` is excluded from all I/O, including preserved symlinks. The current user-approved source checkout is `/Volumes/Tyler HDD 6TB/miki-engine`; the older replacement `strata` checkout is preserved. Active models, builds, caches and performance-sensitive storage remain on approved internal-SSD paths. New model downloads and archival receipts may use the approved 6 TB HDD as cold storage, with verified real SSD copies before testing.
 
 ## Candidate contract and limits
 

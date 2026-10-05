@@ -24,6 +24,7 @@ class Canary:
     catalog_id: str | None
     scope: str
     does_not_cover: tuple[str, ...]
+    verified_remote_weight_bytes: int | None = None
 
 
 CANARIES = (
@@ -33,6 +34,11 @@ CANARIES = (
     Canary('qwen-hybrid', 'qwen', 'Qwen3.5-0.8B-OptiQ-4bit', 'mlx-community/Qwen3.5-0.8B-OptiQ-4bit',
            'ef60586933bd2cc02b763f77eb8839a5114bbec1', 'qwen3_5', 8, None,
            'research canary: hybrid recurrent text state; vision separate', ('MoE', 'Qwen3.8 shapes', 'VLM quality')),
+    Canary('qwen38-fleet', 'qwen', 'Qwen3.8-27B-4bit', 'mlx-community/Qwen3.8-27B-4bit',
+           '3e6447f082e89cc7f0bc6e5441afd38dfce760ff', 'qwen3_5', 24, 'qwen3.8-27b',
+           'smallest general-purpose Qwen3.8 open checkpoint found; catalog weight estimate is wrong',
+           ('resident 16 GiB M1 performance', 'full-size transfer from Qwen3.5 0.8B', 'MoE'),
+           16054541349),
     Canary('llama-small', 'llama', 'Llama-3.2-1B-Instruct-4bit', 'mlx-community/Llama-3.2-1B-Instruct-4bit',
            '08231374eeacb049a0eade7922910865b8fce912', 'llama', 8, 'llama-3.2-1b',
            'small catalog dense GQA/SwiGLU text canary', ('Llama4 MoE', 'larger weight/KV footprints', 'vision')),
@@ -46,12 +52,18 @@ CANARIES = (
     Canary('gemma4-small', 'gemma', 'gemma-4-e2b-it-4bit', 'mlx-community/gemma-4-e2b-it-4bit',
            '238767527555cb75a05732a84dff5d6ba0dd6809', 'gemma4', 8, 'gemma-4-e2b',
            'current catalog dense Gemma4 with per-layer embeddings; E2B is effective, not total parameters',
-           ('Gemma4 26B MoE', 'Gemma4 12B encoder-free path', 'vision/audio qualification')),
+           ('Gemma4 26B MoE', 'Gemma4 12B encoder-free path', 'vision/audio qualification'),
+           3550670554),
     Canary('deepseek-distill', 'deepseek', 'DeepSeek-R1-Distill-Qwen-1.5B-4bit',
            'mlx-community/DeepSeek-R1-Distill-Qwen-1.5B-4bit',
            '933185be1b8f81d9a21dcfa15ff73470d3545240', 'qwen2', 8, None,
            'research-only R1 distill, Qwen2 architecture; not a native DeepSeek canary',
            ('DeepSeek MLA', 'DeepSeek MoE/expert paging', 'DeepSeek V4 sparse attention')),
+    Canary('deepseek-v4-fleet', 'deepseek', 'DeepSeek-V4-Flash', 'deepseek-ai/DeepSeek-V4-Flash',
+           '60d8d70770c6776ff598c94bb586a859a38244f1', 'deepseek_v4', 256, None,
+           '284B total / 13B active; research capacity tier only, native architecture unsupported locally',
+           ('resident M1 execution', 'V4 CSA/HCA/mHC correctness from R1 distills', 'production support'),
+           159617149040),
     Canary('glm-ocr', 'glm', 'GLM-OCR-4bit', 'mlx-community/GLM-OCR-4bit',
            '97f587506984cc92fa69b2694b4128e53db6b081', 'glm_ocr', 16, 'glm-ocr',
            'small OCR/VLM path only, requires image fixtures and VLM oracle',
@@ -60,11 +72,20 @@ CANARIES = (
            '1454cffb1a21737e162f508e5bc70be9def89276', 'glm4_moe_lite', 32, 'glm-4.7-flash',
            'smallest current catalog GLM chat lane; fleet or bounded native component fixtures on M1',
            ('GLM5 DSA', 'large-shape hardware performance')),
+    Canary('glm5-latest-fleet', 'glm', 'GLM-5.3-Flash', 'zai-org/GLM-5.3-Flash',
+           'eb9eb208eb0d988989d07a6a12d0fdeb5f52574a', 'glm5_next', 512, None,
+           'current native GLM5 Flash: 320B total / 18B active, sparse/linear attention and mHC; unqualified research tier',
+           ('resident M1 execution', 'native GLM5 parity from GLM-OCR or GLM4.7', 'production support'),
+           328337455672),
     Canary('gpt-oss-fleet', 'gpt-oss', 'gpt-oss-20b-MXFP4-Q8', 'mlx-community/gpt-oss-20b-MXFP4-Q8',
            '773a7da77e569019bb0fd17a554b263738d669a3', 'gpt_oss', 32, 'gpt-oss-20b',
            'smallest GPT-OSS release; preserve MoE/MXFP4/Harmony, fleet target on this M1',
            ('120B hardware performance', 'MXFP4 parity from affine-Q4 tests')),
 )
+
+# Additional unchanged-MLX controls only. This does not admit new optimizer plans.
+BASELINE_MODELS = EVOLVE_MODELS | frozenset(
+    c.local_name for c in CANARIES if c.key in ('llama-small', 'gemma4-small', 'deepseek-distill'))
 
 
 def plan(memory_bytes, installed_names=()):

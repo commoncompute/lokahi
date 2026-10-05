@@ -16,9 +16,18 @@ from ..runtime import candidate, prepare
 from ..system import admission, system_info, real_path
 from .statistics import summary
 from .workloads import WORKLOADS, WARMUPS, prompt
+from .families import BASELINE_MODELS, EVOLVE_MODELS
 
 PARTIAL_REPORT = {}
 PLANS = {}
+
+
+def validate_worker_scope(args):
+    if args.model not in BASELINE_MODELS:
+        raise ValueError('model outside the pinned baseline allowlist')
+    if args.model not in EVOLVE_MODELS and not (
+            args.baseline and args.mode == args.baseline_mode == 'control' and not args.memory_only):
+        raise ValueError('new family is unchanged-MLX baseline-only; optimizer plans are not qualified')
 
 
 def error_gate(actual, expected):
@@ -160,6 +169,7 @@ def pure_phase_probe(model, tokenizer):
 
 def run(args):
     global PARTIAL_REPORT
+    validate_worker_scope(args)  # Before admission, framework imports or model I/O.
     admission_before = admission()
     import os
     os.environ['HF_HUB_OFFLINE'] = '1'
@@ -179,6 +189,11 @@ def run(args):
             real_path(provenance / (item.name + '.metadata'))
     path, model_identity = artifact(args.model)
     config = json.loads((path / 'config.json').read_text())
+    expected_type = {'Llama-3.2-1B-Instruct-4bit': 'llama',
+                     'gemma-4-e2b-it-4bit': 'gemma4',
+                     'DeepSeek-R1-Distill-Qwen-1.5B-4bit': 'qwen2'}.get(args.model)
+    if expected_type and config.get('model_type') != expected_type:
+        raise ValueError('pinned baseline architecture mismatch')
     admission()
     begin = time.perf_counter()
     model, tokenizer = load(str(path), lazy=False, tokenizer_config={'trust_remote_code': False})
@@ -198,6 +213,8 @@ def run(args):
               'peak_process_memory_boundary': 'fresh worker lifetime high-water, not per-request peak',
               'kv_memory_bytes': None, 'temporary_buffer_bytes': None,
               'production_promotion_eligible': False}
+    report['correctness_scope'] = 'baseline repeatability/logits/cache self-consistency; independent candidate parity only for non-control routes'
+    report['family_optimization_qualified'] = args.model in EVOLVE_MODELS
     PARTIAL_REPORT = report
     PLANS.clear()
     for mode in {args.mode, args.baseline_mode, 'control'}:
@@ -225,7 +242,9 @@ def run(args):
         report['memory_probe_boundary'] = 'matched single-route fresh worker load/correctness/3 warmups/fixed requests'
     elif args.baseline:
         with candidate(model, args.baseline_mode, prepared=PLANS[args.baseline_mode]):
-            report['profile'] = profile(model, tokenizer)
+            report['profile'] = (profile(model, tokenizer) if args.model in EVOLVE_MODELS else
+                                 {'scope': 'no family-specific operator attribution adapter qualified',
+                                  'next_search_family': None})
             report['pure_phase_probes'] = pure_phase_probe(model, tokenizer)
         for workload in WORKLOADS:
             admission()
@@ -273,7 +292,7 @@ def run(args):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', choices=('Llama-3.2-3B-Instruct-4bit', 'Qwen3-0.6B-4bit'), required=True)
+    parser.add_argument('--model', choices=sorted(BASELINE_MODELS), required=True)
     parser.add_argument('--mode', choices=('control', 'compile_decode', 'compile_prefill', 'compile_both'), default='control')
     parser.add_argument('--baseline-mode', choices=('control', 'compile_decode', 'compile_prefill', 'compile_both'), default='control')
     parser.add_argument('--baseline', action='store_true')

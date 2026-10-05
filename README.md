@@ -68,6 +68,10 @@ The [small-family canary ladder](docs/design/SMALL_FAMILY_CANARIES.md) and
 catalog. Small-model wins do not automatically transfer to larger models or
 chips; native DeepSeek/GLM/GPT-OSS paths remain separately gated. The planner
 does not download weights, qualify performance or widen the optimizer allowlist.
+`family-plan --catalog /absolute/path/mlxCatalog.gen.ts` reports every LLM/VLM
+architecture lane without executing TypeScript or editing CommonCompute. Exact
+Qwen3.8/V4 targets are separate from small older-model proxies. Pinned Gemma4
+E2B/Llama1B/R1-distill controls are baseline-only, not new optimized backends.
 
 ## Current verified baseline
 

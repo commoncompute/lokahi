@@ -8,6 +8,7 @@ from importlib.metadata import version
 import json
 import os
 from pathlib import Path
+import re
 import statistics
 import time
 
@@ -16,6 +17,9 @@ MODELS = {
     "Llama-3.2-3B-Instruct-4bit": ("mlx-community/Llama-3.2-3B-Instruct-4bit", "7f0dc925e0d0afb0322d96f9255cfddf2ba5636e"),
     "Qwen3-0.6B-4bit": ("mlx-community/Qwen3-0.6B-4bit", "73e3e38d981303bc594367cd910ea6eb48349da8"),
     "Qwen3.5-0.8B-OptiQ-4bit": ("mlx-community/Qwen3.5-0.8B-OptiQ-4bit", "ef60586933bd2cc02b763f77eb8839a5114bbec1"),
+    "Llama-3.2-1B-Instruct-4bit": ("mlx-community/Llama-3.2-1B-Instruct-4bit", "08231374eeacb049a0eade7922910865b8fce912"),
+    "gemma-4-e2b-it-4bit": ("mlx-community/gemma-4-e2b-it-4bit", "238767527555cb75a05732a84dff5d6ba0dd6809"),
+    "DeepSeek-R1-Distill-Qwen-1.5B-4bit": ("mlx-community/DeepSeek-R1-Distill-Qwen-1.5B-4bit", "933185be1b8f81d9a21dcfa15ff73470d3545240"),
 }
 
 
@@ -24,6 +28,17 @@ def artifact(name):
     path = ROOT / name
     if ROOT.is_symlink() or path.is_symlink() or not path.is_dir():
         raise ValueError("model must be a real directory on the approved internal SSD")
+    return verify_snapshot(path, repo, revision)
+
+
+def verify_snapshot(path, repo, revision):
+    """Cold-copy content/provenance check; this never admits HDD inference."""
+    from miki.system import real_path
+    path = real_path(Path(path))
+    if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repo) or not re.fullmatch(r'[0-9a-f]{40}', revision):
+        raise ValueError('exact repository and immutable revision required')
+    if not path.is_dir():
+        raise ValueError('model snapshot must be a real directory')
     files = sorted(p for p in path.iterdir() if p.name.endswith((".json", ".safetensors", ".jinja", ".txt")))
     records = []
     if not any(p.suffix == ".safetensors" for p in files):
@@ -32,6 +47,7 @@ def artifact(name):
         if file.is_symlink() or not file.is_file():
             raise ValueError("symlink or nonregular model file")
         provenance = path / ".cache/huggingface/download" / (file.name + ".metadata")
+        real_path(provenance)
         lines = provenance.read_text().splitlines()
         if len(lines) < 2 or lines[0] != revision:
             raise ValueError(f"unpinned local file: {file.name}")
