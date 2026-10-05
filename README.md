@@ -1,11 +1,11 @@
-# Strata
+# Miki Engine
 
-Strata is a standalone Apple-Silicon LLM engine and learning laboratory for
+Miki Engine (formerly Strata) is a standalone Apple-Silicon LLM engine and learning laboratory for
 adaptive, memory-tiered inference. Its intended product surface is a native
 library, CLI, and local model server; Common Compute is its first proving-ground
 integration through a separate adapter.
 
-For each model and request, Strata admits a safe memory budget and selects a
+For each model and request, the engine admits a safe memory budget and selects a
 measured execution plan for the hardware identity, prompt/decode phase, shape,
 service objective, and live memory/thermal/power state.
 
@@ -16,8 +16,10 @@ versioned SSD weight-pack path, native Metal probes, and an isolated private-ANE
 qualification worker. Full-model heterogeneous execution and MoE expert paging
 remain staged work.
 
-> The installable distribution is named `strata-llm`. The Python import
-> namespace remains `ollm` temporarily for compatibility.
+> The source distribution is now named `miki-engine`; it has not been published
+> to a package registry. `miki_engine` is the new Python entry point. `ollm`,
+> `strata_*` native symbols, stored wire IDs and existing SSD paths remain
+> compatible. The public GitHub repository has not been renamed.
 
 ## Building in public
 
@@ -50,8 +52,16 @@ reserve. No measured candidate win or production promotion is claimed.
 The [October 3 validation report](docs/experiments/MIKI_BOOTSTRAP_20261003.md)
 records the test/build results and both preserved admission failures.
 Run it from the validated source checkout using
-`PYTHONPATH=src .venv/bin/python -m miki system-info`; do not install new
+`PYTHONPATH=src /Users/tylergee/Documents/strata-recovered/.venv/bin/python -m miki system-info`; do not install new
 dependencies implicitly. Existing native/ANE work and MLX fallback are retained.
+
+The [native CommonCompute lifecycle foundation](native/runtime/README.md)
+adds a bounded C++ owner, C ABI, Python binding, Swift actor and lossless
+TypeScript metadata codec. The native core owns admission, FIFO/cancellation,
+reservations and terminal accounting. It is **not** a native model executor,
+Node FFI, XPC service or speedup. See the
+[integration boundary](integrations/commoncompute/native-session-v1/README.md)
+and [validation/migration report](docs/experiments/MIKI_NATIVE_FOUNDATION_20261005.md).
 
 ## Current verified baseline
 
@@ -96,21 +106,27 @@ correctness baseline.
 
 The following remain targets rather than shipped capabilities: a persistent
 production XPC server, multi-request continuous batching, complete native
-Metal/ANE model execution, production SSD paging, and the separate
-`strata_llm` distribution.
+Metal/ANE model execution and production SSD paging. The `strata_llm` compatibility
+runtime ID is not a separate production distribution.
 
 > Storage boundary: the original external HDD failed. Active development and
-> source now lives on the approved replacement HDD; builds, models, caches and
-> experiments use approved internal-SSD locations. Do not access the old
+> source lives at `/Volumes/Tyler HDD 6TB/miki-engine` after verified migration;
+> the existing validated Python environment, active builds, model weights and
+> SQLite stay on the internal SSD. Cold project archives may live on the HDD.
+> Do not access the old
 > HDD or follow preserved symlinks to it. Other contributors must select their
 > own model/cache locations; resident comparisons keep SSD offload disabled.
 
 ## Architecture direction
 
+This diagram describes the target topology, not a claim that each path is a
+production implementation. The current native session owner is CPU metadata
+control; native GPU and ANE components remain separately qualified experiments.
+
 ```mermaid
 flowchart TD
-    CLI["strata CLI"] --> API["Stable libstrata API"]
-    DAEMON["stratad local server"] --> API
+    CLI["Miki Engine CLI target"] --> API["Native engine API target"]
+    DAEMON["Miki Engine local server target"] --> API
     CC["Common Compute XPC adapter"] --> API
     API --> ADMIT["Live admission + memory budget"]
     ADMIT --> BATCH["Prefill/decode batch scheduler"]

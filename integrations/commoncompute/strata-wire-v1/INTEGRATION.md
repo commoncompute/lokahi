@@ -1,5 +1,14 @@
 # Common Compute integration playbook
 
+> Historical plaintext fixture design (2026-08-25), not the current sealed
+> customer transport. Inspection on 2026-10-04 found assignment-scoped
+> `XPCMLXLLMRunner` and `SealedXPCMLXLLMContract`: signed model authorization,
+> ciphertext-only input and worker-side decryption. Do **not** replace that
+> boundary with this package's plaintext request fixtures. The newer
+> [native-session foundation](../native-session-v1/README.md) consumes trusted
+> metadata inside an authorized worker; it does not implement XPC or decryption.
+> The integration steps below remain historical targets, not completed work.
+
 ## Current repository mapping
 
 The Common Compute checkout inspected on 2026-08-25 has:

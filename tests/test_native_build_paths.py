@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
     ("ane", "Makefile.experiments", "all"),
     ("planning", "Makefile", "test"),
     ("metal", "Makefile.q4", "test"),
+    ("runtime", "Makefile", "test"),
 ])
 def test_native_make_keeps_build_paths_with_spaces_intact(tmp_path, directory, makefile, target):
     make = shutil.which("make")

@@ -1,9 +1,10 @@
-# Strata agent instructions
+# Miki Engine agent instructions
 
-Strata is an Apple-Silicon LLM inference runtime and learning laboratory. Keep
-the Python import namespace `ollm` until a dedicated compatibility migration.
-Miki (`src/miki`) is its experimental empirical optimizer, not a renamed or
-qualified CommonCompute serving runtime.
+Miki Engine (formerly Strata) is an Apple-Silicon LLM inference runtime and
+learning laboratory. The distribution is `miki-engine`; `src/miki_engine`
+provides the public Python facade. Preserve `ollm`, `strata_*` C ABI/wire IDs
+and legacy SSD paths for compatibility. `src/miki` remains the experimental
+empirical optimizer; renaming does not qualify a CommonCompute serving runtime.
 
 ## Engineering boundaries
 
@@ -20,15 +21,20 @@ qualified CommonCompute serving runtime.
 - Use generated small fixtures before real model weights.
 - The external HDD failed. Do not access `/Volumes/Tyler HDD`, including through
   preserved symlinks. The approved source checkout is
-  `/Users/tylergee/Documents/strata-recovered` while the replacement 6 TB drive
-  is unmounted. Never overwrite another checkout when it returns. The model root is
+  `/Volumes/Tyler HDD 6TB/miki-engine` after verified migration. If unmounted,
+  stop and report rather than creating a fake mount directory. Preserve the
+  older `/Volumes/Tyler HDD 6TB/strata` checkout and the internal recovery copy.
+  The validated Python environment remains at
+  `/Users/tylergee/Documents/strata-recovered/.venv`. The model root is
   `/Users/tylergee/Library/Application Support/Strata/models`; keep builds,
-  caches and performance storage on the internal SSD. Other contributors must
+  active caches and performance storage on the internal SSD. Cold project
+  archives and source may use the mounted replacement HDD. Other contributors must
   choose their own SSD locations.
   Keep a 40 GiB free-space reserve for local experiments. SSD placement does
   not by itself qualify production model paging.
-  The user approved `/Volumes/X9 Pro/Strata-Miki` for project artifacts. It is
-  exFAT: keep Git worktrees, Python, native builds and SQLite on internal APFS.
+  The user also approved `/Volumes/X9 Pro/Strata-Miki` for project artifacts
+  when mounted. It is exFAT: keep Git worktrees and SQLite on APFS; keep Python
+  and active native builds on the internal SSD.
   Do not format the X9, move unrelated data, or substitute its free space for
   the protected internal-SSD reserve.
 
@@ -75,7 +81,7 @@ Label results as correctness, synthetic, or hardware evidence.
 The current known MLX-capable test environment is:
 
 ```sh
-PYTHONPATH=src .venv/bin/python -m pytest -q -p no:cacheprovider
+PYTHONPATH=src /Users/tylergee/Documents/strata-recovered/.venv/bin/python -m pytest -q -p no:cacheprovider
 ```
 
 The recovered checkout's `.venv` is the locally validated environment, not a
@@ -83,7 +89,7 @@ portable installation requirement. Do not install dependencies silently when
 it is absent; report the gap and obtain a destination first. Also run:
 
 ```sh
-PYTHONPATH=src .venv/bin/python -m compileall -q src tests benchmarks
+PYTHONPATH=src /Users/tylergee/Documents/strata-recovered/.venv/bin/python -m compileall -q src tests benchmarks
 git diff --check
 ```
 
