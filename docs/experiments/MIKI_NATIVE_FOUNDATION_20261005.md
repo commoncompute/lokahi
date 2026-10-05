@@ -32,16 +32,29 @@ downloaded. Model storage remains the existing internal-SSD Strata directory.
 - Combined ASan/UBSan attempt hung **before `main`** in ASan initialization
   on this machine. The sampled test process was terminated; ASan coverage is
   not claimed. UBSan was run separately, not substituted as an ASan result.
-- Full Python regression: **402 tests plus 22 subtests passed**. `compileall`,
-  build-path dry-run contracts and `git diff --check` pass. Migrated-source
-  verification is recorded in the final handoff after execution; CPU tests do
-  not establish LLM latency or throughput.
+- Full Python regression: **402 tests plus 22 subtests passed** both from the
+  internal source and from the migrated HDD source (12.46 s / 12.57 s). Native
+  UBSan also passes from the migrated source. `compileall`, build-path dry-run
+  contracts and `git diff --check` pass. CPU tests do not establish LLM latency
+  or throughput.
 
 The protected 40 GiB internal-SSD reserve initially failed admission. Available
 space fluctuated below the floor during other machine activity; no real-model
 benchmark was forced through and no guard was weakened. Existing baseline
 failures/history remain unchanged. A valid matched MLX/model benchmark is the
 next gate, not an inferred speedup from native linkage.
+
+Fresh Qwen3-0.6B control attempt at clean source commit
+`375c3077eaafd72fe7fc79bc077a9644a042e218`:
+
+- Experiment: `bd83120b799940ba82a2af497810b684`.
+- Outcome: admission failure before loading weights; no measurements/winner.
+- Available internal bytes: 41,808,539,648 (about 38.94 GiB), below the
+  42,949,672,960-byte reserve. The guard was preserved.
+- Private raw failure artifact on the mounted replacement HDD; SHA-256:
+  `14170d7d5da8ea99c8064c7a40b4ee847003abff8d4cf685deb9be5cddf501bf`.
+- Existing private SSD SQLite history received append-only STARTED/FAILED
+  entries. Past results were not rewritten; production eligibility is false.
 
 ## Storage and Git boundary
 
@@ -50,6 +63,15 @@ approved new source checkout is `/Volumes/Tyler HDD 6TB/miki-engine`; migrate
 only into a previously absent path, verify the committed source and preserve
 the older `/Volumes/Tyler HDD 6TB/strata` checkout. Never access the failed
 `/Volumes/Tyler HDD` or follow old symlinks.
+
+Migration completed into the previously absent new path using a local Git
+clone with no hardlinks. Git object checking found no corruption (an existing
+dangling local commit is preserved). The 224-file protected source inventories
+match exactly between source and destination; protected-manifest SHA-256:
+`6b812e509e887949a14d60d41ae5208618b2a6ca6f46f704c520b7f9626edc3d`.
+The older HDD checkout remains clean at `76b8d0d`. The new checkout's public
+origin was configured and fetched read-only; the feature branch has no upstream
+because its new local commits have not been pushed.
 
 Keep the validated environment at
 `/Users/tylergee/Documents/strata-recovered/.venv`, and models, active native
