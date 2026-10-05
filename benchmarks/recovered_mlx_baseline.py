@@ -35,7 +35,7 @@ def verify_snapshot(path, repo, revision):
     """Cold-copy content/provenance check; this never admits HDD inference."""
     from miki.system import real_path
     path = real_path(Path(path))
-    if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repo) or not re.fullmatch(r'[0-9a-f]{40}', revision):
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*', repo) or not re.fullmatch(r'[0-9a-f]{40}', revision):
         raise ValueError('exact repository and immutable revision required')
     if not path.is_dir():
         raise ValueError('model snapshot must be a real directory')

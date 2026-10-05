@@ -71,6 +71,37 @@ precision failures are not waived by this simple projection result.
 Private component receipt SHA-256:
 `b00fb16b06fdaf3ba4fc753fca06dd692dc287bb9f0011184abfcd858e12ef3b`.
 
+### Real-weight first-layer FFN, not full prefill
+
+At clean source `67b588843ec8c0317ad0e34bb906aa95e4fb3b2c`, the existing
+native fused Qwen3 FFN (hidden 1024, intermediate 3072, tanh SiLU lowering,
+NEON layout tile16) was rechecked using captured first-layer activations from
+the pinned Qwen0.6B artifact. Five interleaved route rounds per shape; each
+native arm used five warmups and twenty resident iterations (25 verified
+ANE dispatches), with cleanup successful. FP16 reference absolute/relative
+limits and quantized relative-L2 limits were unchanged and passed.
+
+| Prompt rows | ANE resident + layout I/O | MLX compiled quantized FFN | Component ratio |
+|---|---|---|---|
+| 64 | 0.578 ms | 1.391 ms | 2.41x |
+| 256 | 1.168 ms | 3.591 ms | 3.07x |
+
+These are same-artifact **FFN component** observations, not TTFT, decode or
+full-model gains. Compile/load costs, file IPC and the full GPU-to-ANE-to-GPU
+handoff are excluded. Compile medians were about 77.23 / 94.88 ms per
+shape/round, so resident lifecycle reuse is necessary for a serving candidate.
+The rounds are not independent whole-model process replications. No component
+result bypasses the full-runtime gate or promotes this benchmark executable.
+Repeated raw SHA-256:
+`4b09e2d41dd5f83bf1ef916c7496bdb25aa28bf5a31bb82d5a64587fe2844338`.
+
+The last-layer (27) FFN at 64 tokens still **failed** the native precision gate:
+maximum absolute error 0.25, maximum scaled error 2.426 (>1), despite low
+aggregate relative L2. It stopped after one verified dispatch with successful
+cleanup. This demonstrates why average error alone cannot admit every layer.
+No model-wide ANE substitution was enabled. Failure raw SHA-256:
+`a85cf3a1d7de6a6e09c26e0791539570c301f9a8899829f277422b5d96757f37`.
+
 ## Family coverage and staging
 
 The [canary design](../design/SMALL_FAMILY_CANARIES.md) separates exact new
@@ -97,6 +128,32 @@ Staging receipt SHA-256:
 Gemma4 SSD staging is pending reserve headroom. No native V4, Qwen3.8,
 GLM chat or GPT-OSS weights were downloaded or inferred on this M1.
 
+### Llama1B baseline completed
+
+Clean source `67b588843ec8c0317ad0e34bb906aa95e4fb3b2c`;
+experiment `cffd2bb21ef7429bb8f0304e3dfe01a9`, pinned revision
+`08231374eeacb049a0eade7922910865b8fce912`. Same fixed-work/timing boundary
+as the Qwen control, three warmups and ten samples per workload, resident SSD,
+offload disabled, ANE dispatches zero. Logit/greedy/cache self-consistency
+passed; this is an unchanged MLX control, not independent model quality or
+Miki native execution.
+
+| Prompt tokens | Median TTFT | Median decode | TTFT CV |
+|---|---|---|---|
+| 64 | 106.25 ms | 66.78 tokens/s | 0.026 |
+| 256 | 295.06 ms | 67.09 tokens/s | 0.015 |
+
+Peak MLX memory medians: 847,870,426 / 991,440,090 bytes. No Llama1B candidate
+was promoted or admitted into the optimizer by this baseline-only path.
+Machine-wide swap used grew from 12,309.75 MiB to 13,603.19 MiB during the
+control: **1,293.44 MiB**, above the existing 128 MiB stability bound. Although
+sample CVs were low and generation completed, this control is **resource
+unstable and not performance-promotion evidence**. It needs a fresh quiet-machine
+rerun; background swap cannot be attributed to this worker alone. The raw
+completion record is preserved, with a separate append-only assessment.
+Raw control SHA-256:
+`7fdc1679922a3b95113f5f138929b4221395a57c07f5a7575c47c003fb13318f`.
+
 ## Cache recovery work completed
 
 Three specifically approved inactive CommonCompute Xcode DerivedData folders
@@ -118,11 +175,24 @@ All three approved originals are absent and recoverable from that root.
 
 ## Next gates
 
-New baseline-only controls do not extend the candidate allowlist. Freeze and
-validate the new source before attempting Llama1B/Gemma4/R1-distill controls.
+New baseline-only controls do not extend the candidate allowlist. The Llama1B
+control is complete; Gemma4/R1-distill remain staged-artifact/qualification work.
 Gemma4 text must retain PLE/local-global/shared-KV semantics; image/audio
 paths need separate VLM oracle/fixtures. Native Metal Q4/FFN, CPU layout/cache
 reuse and coarse ANE subgraphs remain the low-level search priorities.
 Changed shapes/quantization/state/chips require new evidence. Never assume
 small-model wins scale, enable SSD paging in resident results, or promise
 fastest inference across all models from this machine.
+
+Local checks at the benchmark checkpoint: **421 Python tests + 22 subtests
+passed**, including the compiled native CLI bounds (invalid requests never
+reach ANE), **400 native transpose cases passed with UBSan**, `compileall` and
+`git diff --check`. Source is locally committed on the Miki feature branch;
+no remote push, deployment, package publication or provider app change.
+
+Follow-up content/provenance fixtures caught a repository-name validation gap:
+the helper accepted `../Tiny`. Repository components now require an initial
+alphanumeric character; immutable pin/hash and no-follow checks remain intact.
+This is a new protected source checkpoint, not a rewrite of hardware records.
+Final follow-up validation: **425 tests + 22 subtests passed**, `compileall`
+and `git diff --check` passed. There are no remaining failing local checks.

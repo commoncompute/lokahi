@@ -13,7 +13,7 @@ from .families import CANARIES, GIB, plan
 from ..system import real_path
 
 ROW = re.compile(
-    r'\s*\{ id: "([a-z0-9.-]+)", repo: "([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)", '
+    r'\s*\{ id: "([a-z0-9.-]+)", repo: "([A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*)", '
     r'revision: "([0-9a-f]{40})", kind: \'(llm|vlm)\', modelType: "([a-z0-9_-]+)", '
     r'minMemoryGb: ([0-9]+), weightsGb: ([0-9]+(?:\.[0-9]+)?), loadable: (true|false) \},\s*')
 
