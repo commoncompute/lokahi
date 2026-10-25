@@ -371,6 +371,24 @@ sections by time above their bandwidth floor
 ([improvement loop](../../docs/IMPROVEMENT_LOOP.md)). Tokens are unchanged by
 profiling (`tests/test_native_engine.py`).
 
+## Tuning per chip
+
+The Metal backend's dispatch thresholds decide which kernel a pass takes and
+how attention splits over the GPU: when a short pass moves to simdgroup
+matrices, when experts group by expert, when Gated DeltaNet runs in chunks,
+how many key blocks decode attention splits into, and how many decode steps
+are encoded ahead. Their defaults were measured on an M1. `--tuning F.json`
+(any command) or the service config's `"tuning"` object overrides them
+(`Tuning` in `src/model.h` lists the fields and their ranges), and `bench`
+reports the tuning it ran.
+
+Every value in range computes the same results up to rounding: the parity
+suite runs each range's two ends against the oracle at the long-prefill bar
+(`test_tuning_range_ends_match_oracle`), and the defaults are bit-identical
+to the constants they replaced. A tuning therefore changes speed, never the
+answer, and `python -m lokahi.lab tune` can search it on each chip
+([improvement loop](../../docs/IMPROVEMENT_LOOP.md#tuning-per-chip)).
+
 ## Checks on machines without Apple SDKs
 
 `tests/syntax_check.sh` parses the Objective-C++ host and the Metal kernels

@@ -1,15 +1,66 @@
 #include "model.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "common.h"
 #include "decoder.h"
+#include "json.h"
 
 #if defined(LOKAHI_WITH_METAL)
 #include "metal/metal_decoder.h"
 #endif
 
 namespace lokahi {
+
+namespace {
+
+// Each tunable field with its name and inclusive range.
+struct TuningField {
+  const char* name;
+  int Tuning::*field;
+  int lo, hi;
+};
+
+constexpr TuningField kTuningFields[] = {
+    {"qmv_mma_min_rows", &Tuning::qmv_mma_min_rows, 2, 9},
+    {"moe_grouped_min_tokens", &Tuning::moe_grouped_min_tokens, 2, 1 << 16},
+    {"gdn_chunk_min_rows", &Tuning::gdn_chunk_min_rows, 2, 1 << 16},
+    {"attn_mm_min_rows", &Tuning::attn_mm_min_rows, 2, 1 << 16},
+    {"decode_groups_per_core", &Tuning::decode_groups_per_core, 1, 64},
+    {"decode_max_blocks", &Tuning::decode_max_blocks, 1, 256},
+    {"prefill_max_blocks", &Tuning::prefill_max_blocks, 1, 64},
+    {"latent_min_block_keys", &Tuning::latent_min_block_keys, 8, 4096},
+    {"inflight_steps", &Tuning::inflight_steps, 1, 8},
+};
+
+}  // namespace
+
+Tuning tuning_from_json(const Json& json, Tuning base) {
+  LK_CHECK(json.is_object(), "tuning must be an object");
+  for (const auto& [key, value] : json.as_object()) {
+    const TuningField* found = nullptr;
+    for (const TuningField& f : kTuningFields) {
+      if (key == f.name) found = &f;
+    }
+    LK_CHECK(found != nullptr, "tuning: unknown field " + key);
+    LK_CHECK(value.is_number() && std::floor(value.as_number()) == value.as_number(),
+             "tuning: " + key + " must be an integer");
+    const double v = value.as_number();
+    LK_CHECK(v >= found->lo && v <= found->hi, "tuning: " + key + " must be in [" + std::to_string(found->lo) + ", " +
+                                                    std::to_string(found->hi) + "]");
+    base.*(found->field) = static_cast<int>(v);
+  }
+  return base;
+}
+
+std::string tuning_to_json(const Tuning& tuning) {
+  std::string out = "{";
+  for (const TuningField& f : kTuningFields) {
+    out += (out.size() > 1 ? ",\"" : "\"") + std::string(f.name) + "\":" + std::to_string(tuning.*(f.field));
+  }
+  return out + "}";
+}
 
 void Profiler::add(const std::string& name, double seconds, double bytes) {
   for (ProfileSection& section : sections_) {

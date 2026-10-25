@@ -28,7 +28,23 @@ def main():
     evolve.add_argument('--population', type=int, choices=(1, 2, 3), default=3)
     evolve.add_argument('--generations', type=int, choices=(1, 2), default=2)
     evolve.add_argument('--time-budget-seconds', type=int, choices=range(60, 3601), default=1800)
+    tune = commands.add_parser('tune', help='search the native engine\'s Metal dispatch thresholds on this Mac')
+    tune.add_argument('--engine', type=Path, required=True, help='a built lokahi binary')
+    tune.add_argument('--model', type=Path, required=True, help='a local model snapshot directory')
+    tune.add_argument('--objective', choices=('decode', 'prefill'), default='decode')
+    tune.add_argument('--prompt-tokens', type=int, default=512)
+    tune.add_argument('--max-new', type=int, default=128)
+    tune.add_argument('--fields', help='comma-separated Tuning fields (default: those the architecture uses)')
+    tune.add_argument('--start', type=Path, help='a tuning JSON to start from')
+    tune.add_argument('--out', type=Path, help='where to write the report (and its .raw.jsonl)')
     args = parser.parse_args()
+    if args.command == 'tune':
+        from .tune import run
+        report = run(args.engine, args.model, prompt_length=args.prompt_tokens, max_new=args.max_new,
+                     objective=args.objective, fields=args.fields.split(',') if args.fields else None,
+                     start=json.loads(args.start.read_text()) if args.start else None, out=args.out)
+        print(json.dumps({key: report[key] for key in ('device', 'gpu_cores', 'objective', 'tuning')}, indent=2))
+        return 0
     if args.command == 'system-info':
         print(json.dumps(system_info(), indent=2))
         return 0

@@ -387,6 +387,105 @@ def test_long_prefill_matches_oracle_closely(native_cli, name, backend, chunk, t
     np.testing.assert_array_equal(got.argmax(axis=1), expected.argmax(axis=1))
 
 
+# The ends of every Tuning range (--tuning), which `lokahi.lab tune` may pick
+# on some chip: "low" sends every pass of 2 tokens or more to the simdgroup-
+# matrix kernels (qmv_mma, grouped experts, gdn_chunk, attn_flash) and splits
+# attention as little as allowed; "high" keeps every pass on the row kernels
+# and splits attention as much as allowed. Passes of 78 tokens and of 5 (a
+# chunk of 5) then two decode steps must hold the long-prefill bar above, so
+# a tuning changes speed, never the answer beyond rounding.
+TUNING_ENDS = {
+    "low": {"qmv_mma_min_rows": 2, "moe_grouped_min_tokens": 2, "gdn_chunk_min_rows": 2, "attn_mm_min_rows": 2,
+            "decode_groups_per_core": 1, "decode_max_blocks": 1, "prefill_max_blocks": 1,
+            "latent_min_block_keys": 4096, "inflight_steps": 1},
+    "high": {"qmv_mma_min_rows": 9, "moe_grouped_min_tokens": 65536, "gdn_chunk_min_rows": 65536,
+             "attn_mm_min_rows": 65536, "decode_groups_per_core": 64, "decode_max_blocks": 256,
+             "prefill_max_blocks": 64, "latent_min_block_keys": 8, "inflight_steps": 8},
+}
+
+
+@pytest.mark.parametrize("ends", sorted(TUNING_ENDS))
+@pytest.mark.parametrize("chunk", [512, 5])
+@pytest.mark.parametrize("name", ["llama3-tied-rope-llama3", "qwen3-qk-norm-hd128", "gemma3-tied-hd256-rope-scaled",
+                                  "mistral-sliding-untied", "gemma4-e2b-shape", "gemma4-wide-heads",
+                                  "qwen3-moe-top2-of-8", "gpt-oss-mxfp4-yarn", "gemma4-26b-a4b-moe",
+                                  "deepseek-v3-absorbed-grouped", "deepseek-v2-lite-geometry", "llama3-f16-scales",
+                                  "qwen3-next-mlx"])
+def test_tuning_range_ends_match_oracle(native_cli, name, chunk, ends, tmp_path):
+    if "metal" not in _backends():
+        pytest.skip("Metal only")
+    oracle = _write_named(tmp_path / "model", name)
+    tuning = tmp_path / "tuning.json"
+    tuning.write_text(json.dumps(TUNING_ENDS[ends]))
+    tokens = (TOKENS * 4)[:80]
+    out = tmp_path / "logits.bin"
+    report = _run(native_cli, "logits", "--model", str(tmp_path / "model"), "--backend", "metal",
+                  "--tokens", ",".join(map(str, tokens)), "--prefill", str(len(tokens) - 2),
+                  "--prefill-chunk", str(chunk), "--tuning", str(tuning), "--out", str(out))
+    got = np.fromfile(out, dtype=np.float32).reshape(report["rows"], oracle.config.vocab_size)
+    expected = oracle.logits(tokens)[len(tokens) - 3 :]
+    np.testing.assert_allclose(got, expected, atol=2e-3 * np.abs(expected).max(), rtol=0)
+    np.testing.assert_array_equal(got.argmax(axis=1), expected.argmax(axis=1))
+
+
+# The tuning reaches the kernels: the two ends take different kernels and
+# splits, whose rounding differs in the low bits (an ignored --tuning would
+# give identical bytes and pass the test above vacuously).
+@pytest.mark.parametrize("name", ["llama3-tied-rope-llama3", "qwen3-moe-top2-of-8", "qwen3-next-mlx",
+                                  "deepseek-v3-absorbed-grouped"])
+def test_tuning_ends_take_different_kernels(native_cli, name, tmp_path):
+    if "metal" not in _backends():
+        pytest.skip("Metal only")
+    _write_named(tmp_path / "model", name)
+    tokens = (TOKENS * 4)[:80]
+    outputs = []
+    for ends in sorted(TUNING_ENDS):
+        tuning, out = tmp_path / f"{ends}.json", tmp_path / f"{ends}.bin"
+        tuning.write_text(json.dumps(TUNING_ENDS[ends]))
+        _run(native_cli, "logits", "--model", str(tmp_path / "model"), "--backend", "metal",
+             "--tokens", ",".join(map(str, tokens)), "--prefill", str(len(tokens) - 2), "--prefill-chunk", "5",
+             "--tuning", str(tuning), "--out", str(out))
+        outputs.append(out.read_bytes())
+    assert outputs[0] != outputs[1]
+
+
+# Decode steps encoded ahead (inflight_steps 1 and 8) emit the same tokens,
+# and bench reports the tuning it ran.
+@pytest.mark.parametrize("name", ["llama3-tied-rope-llama3", "qwen3-next-mlx"])
+def test_tuning_inflight_steps_keep_tokens(native_cli, name, tmp_path):
+    if "metal" not in _backends():
+        pytest.skip("Metal only")
+    directory = tmp_path / "model"
+    _write_named(directory, name)
+    runs = {}
+    for steps in (1, 2, 8):
+        tuning = tmp_path / f"tuning{steps}.json"
+        tuning.write_text(json.dumps({"inflight_steps": steps}))
+        report = _run(native_cli, "bench", "--model", str(directory), "--backend", "metal",
+                      "--tokens", ",".join(map(str, TOKENS)), "--max-new", "12", "--warmups", "0",
+                      "--repetitions", "1", "--tuning", str(tuning))
+        assert report["tuning"]["inflight_steps"] == steps
+        assert report["tuning"]["qmv_mma_min_rows"] == 3  # unnamed fields keep their defaults
+        runs[steps] = report["repetitions"][0]["token_ids"]
+    assert runs[1] == runs[2] == runs[8]
+
+
+@pytest.mark.parametrize("tuning,message", [
+    ({"qmv_mma_min_rows": 1}, "qmv_mma_min_rows must be in [2, 9]"),
+    ({"inflight_steps": 2.5}, "inflight_steps must be an integer"),
+    ({"tile": 32}, "unknown field tile"),
+    ([1], "tuning must be an object"),
+])
+def test_tuning_refuses_unknown_fields_and_out_of_range(native_cli, tuning, message, tmp_path):
+    directory = tmp_path / "model"
+    write_tiny_dense(directory, DENSE_VARIANTS["llama3-tied-rope-llama3"])
+    path = tmp_path / "tuning.json"
+    path.write_text(json.dumps(tuning))
+    result = subprocess.run([str(native_cli), "info", "--model", str(directory), "--backend", "cpu",
+                             "--tuning", str(path)], capture_output=True, text=True)
+    assert result.returncode != 0 and message in result.stderr, result.stderr
+
+
 # Gated DeltaNet's chunked rule (gdn_chunk) against the oracle at a quarter of
 # the tolerance above: Qwen3-Next's mixture of experts stages in float, so
 # the fixture lands at 2.2e-4 to 2.7e-4 of the logits' scale, where a 1% error
