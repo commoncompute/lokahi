@@ -3,9 +3,9 @@
 This document is the shared design and learning context for Lōkahi. Future work should use it as the project reference.
 
 The canonical detailed internal engine design is
-[`docs/LOKAHI_ENGINE_ARCHITECTURE.md`](docs/LOKAHI_ENGINE_ARCHITECTURE.md).
+[`docs/LOKAHI_ENGINE_ARCHITECTURE.md`](LOKAHI_ENGINE_ARCHITECTURE.md).
 The canonical Common Compute/Lōkahi ownership and native service boundary is
-[`docs/COMMON_COMPUTE_RUNTIME.md`](docs/COMMON_COMPUTE_RUNTIME.md). This context
+[`docs/COMMON_COMPUTE_RUNTIME.md`](COMMON_COMPUTE_RUNTIME.md). This context
 document retains the teaching-oriented explanation and historical roadmap.
 
 ## 1. Project identity

@@ -1,5 +1,0 @@
-#export PYTORCH_CUDA_CUBLASLT_DISABLE=1
-#export CUBLAS_WORKSPACE_CONFIG=:4096:8
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-
-CUDA_VISIBLE_DEVICES=0 python example.py

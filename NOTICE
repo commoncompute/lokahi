@@ -16,10 +16,6 @@ derived from oLLM and are also available under its MIT license:
   src/lokahi/gds_loader.py
   src/lokahi/inference.py
   src/lokahi/utils.py
-  example.py
-  example_multimodality.py
-  run_example.bash
-  samples/
 
 MIT License
 

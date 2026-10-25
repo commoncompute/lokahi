@@ -244,7 +244,7 @@ state machine, hardware profile, and explicit limitations.
 | `src/lokahi/backends/ane_segment.py` | Exact LokahiIR-to-ANE linear lowering |
 | `tests/` | Deterministic offline correctness suite |
 | `animations/prefill_vs_decode.py` | First Manim learning lesson |
-| `LOKAHI_ENGINEERING_CONTEXT.md` | Architecture, equations, roadmap, and handoff context |
+| `docs/ENGINEERING_CONTEXT.md` | Architecture, equations, roadmap, and handoff context |
 
 ## Local setup
 
@@ -266,7 +266,7 @@ PYTHONPATH=src python -m pytest -q
 The smallest model smoke test is:
 
 ```bash
-python quick_demo.py
+python examples/quick_demo.py
 ```
 
 Model downloads use Hugging Face. Authenticate before loading gated models and
@@ -313,7 +313,7 @@ measurement overhead and should be disabled for throughput benchmarks.
 6. Grow Metal/Core ML/ANE operation envelopes into verified transformer
    segments and keep only alternatives that improve the full serving plan.
 
-See [LOKAHI_ENGINEERING_CONTEXT.md](LOKAHI_ENGINEERING_CONTEXT.md) for the full
+See [docs/ENGINEERING_CONTEXT.md](docs/ENGINEERING_CONTEXT.md) for the full
 technical design and teaching context.
 
 ## License
