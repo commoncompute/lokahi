@@ -115,6 +115,7 @@ ServiceOptions ServiceOptions::from_json(const Json& config) {
   options.kv_cache = config.string_or("kv_cache", options.kv_cache);
   options.queue_limit = static_cast<int>(config.int_or("queue_limit", options.queue_limit));
   options.max_sequences = static_cast<int>(config.int_or("max_sequences", options.max_sequences));
+  if (const Json* tuning = config.find("tuning")) options.tuning = tuning_from_json(*tuning);
   options.text_flush_ms = config.number_or("text_flush_ms", options.text_flush_ms);
   options.runtime_revision = config.string_or("runtime_revision", "");
   LK_CHECK(options.queue_limit >= 0 && options.text_flush_ms >= 0.0, "service config has a negative limit");
@@ -129,6 +130,7 @@ struct Service::Impl {
     load.max_context = options.max_context;
     load.kv_cache = options.kv_cache;
     load.max_sequences = options.max_sequences;
+    load.tuning = options.tuning;
     for (const ServiceModel& m : options.models) {
       models.push_back(std::make_unique<LoadedModel>(m, load));
       models.back()->busy.assign(static_cast<size_t>(options.max_sequences), false);

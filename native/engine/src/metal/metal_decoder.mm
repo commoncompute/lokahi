@@ -231,9 +231,6 @@ struct QmmParams { int n; int rows; int cols; };
 struct QmmGluParams { int n; int rows; int cols; int silu; };
 struct QmvNParams { int rows; int cols; int n; };
 constexpr int kQmvNMax = 8;  // QMV_N_MAX in decoder_kernels.metal
-// From this many tokens, 4-bit short passes run qmv_mma (simdgroup matrices)
-// instead of qmv_n; at 2 tokens qmv_n is as fast on M1.
-constexpr int kQmvMmaMinRows = 3;
 struct ElementwiseParams { int count; };
 struct GluMulParams { int count; int silu; };
 struct RopeParams {
@@ -249,11 +246,6 @@ struct MoeRouteParams {
 struct GatherParams { int rows; int cols; int k; int input_rows; int act; int has_bias; float limit; int x_stride; int y_stride; };
 struct MoeSortParams { int pairs; int experts; };
 struct HeadTilesParams { int n; int heads; };
-// From this many tokens, a pass's experts run grouped by expert (moe_sort,
-// moe_qmm) instead of one matrix-vector product per (token, slot) pair.
-constexpr int kMoeGroupedMinTokens = 16;
-// From this many tokens, Gated DeltaNet's rule runs in chunks of 8 (gdn_chunk).
-constexpr int kGdnChunkMinRows = 16;
 struct AbsorbParams { int heads; int nope; int head_rows; int cols; int x_stride; int y_stride; };
 struct MlaRopeParams {
   int heads; int nope; int rope; int rank; int start_pos; float eps; int pairs; float factor; int capacity = 0;
@@ -300,31 +292,20 @@ SampleParams sample_params(const SamplingParams& sp, int vocab, int history_inde
                       static_cast<uint32_t>(sp.seed >> 32)};
 }
 
-constexpr int kDecodeMaxBlocks = 64;  // most key blocks a decode step's attention splits into
-// Decode attention aims at this many threadgroups per GPU core: on an M1,
-// 8 kv heads in 8 key blocks attended 13-45% faster than in up to 64 blocks
-// of at least 32 keys (fewer threadgroups spend less on merging partials),
-// and 1-2 blocks starved the GPU.
-constexpr int kDecodeGroupsPerCore = 8;
-constexpr int kPrefillMaxBlocks = 8;
-// Fewest keys per block of a latent-attention decode step (attn_flash with
-// head_rows): each block stages them 8 at a time for all 32 heads of a tile.
-constexpr int kLatentMinBlockKeys = 64;
-// Passes of at least this many tokens attend on simdgroup matrices (attn_qk,
-// softmax_rows, attn_pv), their scores held in at most this many floats.
-constexpr int kAttnMmMinRows = 16;
 // The most query and accumulator values per lane attn_partial takes before
 // a kv head's query heads split over threadgroups (encode_attention).
 constexpr int kAttnLaneValues = 16;
+// Simdgroup-matrix attention (attn_qk, softmax_rows, attn_pv) holds its
+// scores in at most this many floats.
 constexpr size_t kAttnScoresBudget = size_t{1} << 24;
-constexpr int kInflightSteps = 2;
 
 class DecoderMetal final : public Model {
  public:
   DecoderMetal(std::shared_ptr<DecoderWeights> weights, const LoadOptions& options)
       : w_(std::move(weights)), c_(w_->config), max_context_(options.max_context), sequences_(options.max_sequences),
         chunk_(std::max(1, std::min(options.prefill_chunk, options.max_context))),
-        kv_f16_(kv_cache_f16(options, c_, true)) {
+        kv_f16_(kv_cache_f16(options, c_, true)),
+        tuning_(options.tuning) {
     @autoreleasepool {
       device_ = MTLCreateSystemDefaultDevice();
       LK_CHECK(device_ != nil, "metal: no Metal device");
@@ -683,7 +664,7 @@ class DecoderMetal final : public Model {
       int next_step = 1;
       bool stopped = (stop_at_eos && is_eos(out[0])) || (on_token && !on_token(out[0]));
       while (!stopped && static_cast<int>(out.size()) < max_new) {
-        while (next_step < max_new && static_cast<int>(inflight.size()) < kInflightSteps) {
+        while (next_step < max_new && static_cast<int>(inflight.size()) < tuning_.inflight_steps) {
           id<MTLCommandBuffer> cb = encode_decode_step(base + next_step - 1, next_step);
           [cb commit];
           inflight.emplace_back(cb, next_step);
@@ -1188,7 +1169,7 @@ class DecoderMetal final : public Model {
       int32_t* heads = static_cast<int32_t*>([head_index_ contents]);
       for (size_t i = 0; i < chunk * H; ++i) heads[i] = static_cast<int32_t>(i % H);
     }
-    const size_t partials = std::max(H * kDecodeMaxBlocks, chunk * H * kPrefillMaxBlocks);
+    const size_t partials = std::max(H * tuning_.decode_max_blocks, chunk * H * tuning_.prefill_max_blocks);
     part_o_ = private_buffer(partials * D * f);
     part_ml_ = private_buffer(partials * 2 * f);
     logits_ = shared_buffer(static_cast<size_t>(c_.vocab_size) * f);
@@ -1363,7 +1344,7 @@ class DecoderMetal final : public Model {
     if (n <= kQmvNMax && !l.mxfp4) {  // a short pass: read the weights once for all n tokens
       // 4-bit weights on simdgroup matrices: one dequantization for all n
       // (its 32-code steps need groups of a multiple of 32).
-      if (l.bits == 4 && l.group % 32 == 0 && n >= kQmvMmaMinRows) {
+      if (l.bits == 4 && l.group % 32 == 0 && n >= tuning_.qmv_mma_min_rows) {
         [enc setComputePipelineState:checked(quant_pipeline("qmv_mma", l), "qmv_mma", 256)];
         bind_weights(enc, l, 0);
         bind(enc, x, 0, 3);
@@ -1634,7 +1615,7 @@ class DecoderMetal final : public Model {
     // A long pass in chunks of 8 tokens on simdgroup matrices (gdn_chunk),
     // for the key widths it is built for.
     const int dk = c_.linear_k_dim;
-    const bool chunked = n >= kGdnChunkMinRows && c_.linear_v_dim % 8 == 0 &&
+    const bool chunked = n >= tuning_.gdn_chunk_min_rows && c_.linear_v_dim % 8 == 0 &&
                          (dk == 16 || dk == 32 || dk == 64 || dk == 128 || dk == 256);
     [enc setComputePipelineState:pipeline(chunked ? "gdn_chunk_k" + std::to_string(dk) : std::string("gdn_recurrence"))];
     bind(enc, rows, 0, 0);
@@ -1822,7 +1803,7 @@ class DecoderMetal final : public Model {
     // Image blocks let a query also see up to plan_.reach later keys.
     const bool blocks = !plan_.empty() && plan_.reach > 0 && c_.image_blocks_apply(G.sliding);
     // A batched pass's rows are different sequences: attn_partial, row by row.
-    if (n >= kAttnMmMinRows && !c_.attention_sinks && !batched_) {
+    if (n >= tuning_.attn_mm_min_rows && !c_.attention_sinks && !batched_) {
       // 512-wide heads need the half cache (8 float keys of 512 would not fit).
       const bool flash_width =
           G.head_dim == 64 || G.head_dim == 128 || G.head_dim == 256 || (G.head_dim == 512 && kv_f16_);
@@ -1842,8 +1823,9 @@ class DecoderMetal final : public Model {
     int g = group;
     while (g > 1 && (g * (G.head_dim / 32) > kAttnLaneValues || group % g != 0)) --g;
     const int head_groups = G.kv_heads * (group / g);
-    const int max_blocks = n == 1 ? std::clamp(kDecodeGroupsPerCore * gpu_cores_ / head_groups, 1, kDecodeMaxBlocks)
-                                  : kPrefillMaxBlocks;
+    const int max_blocks =
+        n == 1 ? std::clamp(tuning_.decode_groups_per_core * gpu_cores_ / head_groups, 1, tuning_.decode_max_blocks)
+               : tuning_.prefill_max_blocks;
     const int min_block = n == 1 ? 32 : 64;
     const int block = std::max(min_block, (keys_max + max_blocks - 1) / max_blocks);
     const int n_blocks = (keys_max + block - 1) / block;
@@ -1996,7 +1978,7 @@ class DecoderMetal final : public Model {
   void encode_per_head(id<MTLComputeCommandEncoder> enc, const GpuExperts& w, id<MTLBuffer> x, id<MTLBuffer> y,
                        const GatherParams& params, int n) {
     const int H = c_.num_heads;
-    if (n < kMoeGroupedMinTokens || !groupable(w)) {
+    if (n < tuning_.moe_grouped_min_tokens || !groupable(w)) {
       [enc setComputePipelineState:quant_pipeline("qmv_gather", w.format())];
       bind(enc, w.words, 0);
       bind(enc, w.scales, 1);
@@ -2071,7 +2053,7 @@ class DecoderMetal final : public Model {
     // kv_lora_rank of the latents, four simdgroups per 8 query rows.
     const bool flash_shape = (width == 576 && c_.kv_lora_rank == 512) || (width == 96 && c_.kv_lora_rank == 64);
     // A batched pass's rows are different sequences: attn_partial, row by row.
-    if (n >= kAttnMmMinRows && flash_shape && !batched_) {
+    if (n >= tuning_.attn_mm_min_rows && flash_shape && !batched_) {
       [enc setComputePipelineState:pipeline("attn_flash_mla_" + std::to_string(width), 512)];
       bind(enc, latent_q_, 0, 0);
       bind(enc, G.k_cache, kv_offset(G), 1);
@@ -2092,9 +2074,9 @@ class DecoderMetal final : public Model {
       // per 32 heads (attn_partial read it once per head), split into key
       // blocks sized to the GPU, then attn_reduce over the values.
       const int row_tiles = (H + 31) / 32, keys = batched_ ? batch_keys_ : start + 1;
-      const int wanted = std::clamp(kDecodeGroupsPerCore * gpu_cores_ / (row_tiles * n), 1,
-                                    batched_ ? kPrefillMaxBlocks : kDecodeMaxBlocks);
-      const int block = (std::max(kLatentMinBlockKeys, (keys + wanted - 1) / wanted) + 7) / 8 * 8;
+      const int wanted = std::clamp(tuning_.decode_groups_per_core * gpu_cores_ / (row_tiles * n), 1,
+                                    batched_ ? tuning_.prefill_max_blocks : tuning_.decode_max_blocks);
+      const int block = (std::max(tuning_.latent_min_block_keys, (keys + wanted - 1) / wanted) + 7) / 8 * 8;
       const int n_blocks = (keys + block - 1) / block;
       [enc setComputePipelineState:pipeline("attn_flash_mla_" + std::to_string(width) + (batched_ ? "_rows" : ""), 512)];
       bind(enc, latent_q_, 0, 0);
@@ -2128,8 +2110,9 @@ class DecoderMetal final : public Model {
     }
     const int keys_max = batched_ ? batch_keys_ : start + n;
     const int max_blocks =
-        n == 1 ? std::clamp(kDecodeGroupsPerCore * gpu_cores_ * kHeadsPerGroup / H, 1, kDecodeMaxBlocks)
-               : kPrefillMaxBlocks;
+        n == 1 ? std::clamp(tuning_.decode_groups_per_core * gpu_cores_ * kHeadsPerGroup / H, 1,
+                            tuning_.decode_max_blocks)
+               : tuning_.prefill_max_blocks;
     const int block = std::max(n == 1 ? 32 : 64, (keys_max + max_blocks - 1) / max_blocks);
     const int n_blocks = (keys_max + block - 1) / block;
     [enc setComputePipelineState:pipeline("attn_partial_g" + std::to_string(kHeadsPerGroup) + "_d" +
@@ -2346,7 +2329,7 @@ class DecoderMetal final : public Model {
     const int K = c_.experts_per_token;
     const int act = c_.activation == Activation::ClampedSwiglu ? 2 : c_.activation == Activation::Silu ? 1 : 0;
     const int has_bias = c_.expert_bias ? 1 : 0;
-    if (n >= kMoeGroupedMinTokens && groupable(G.expert_gate) && groupable(G.expert_down)) {
+    if (n >= tuning_.moe_grouped_min_tokens && groupable(G.expert_gate) && groupable(G.expert_down)) {
       encode_experts_grouped(enc, G, n, input, act, has_bias);
     } else {
       encode_experts_per_pair(enc, G, n, input, act, has_bias);
@@ -2856,7 +2839,8 @@ class DecoderMetal final : public Model {
   id<MTLDevice> device_ = nil;
   id<MTLCommandQueue> queue_ = nil;
   id<MTLLibrary> library_ = nil;
-  int gpu_cores_ = 8;       // gpu_core_count(), for sizing decode attention
+  const Tuning tuning_;  // dispatch thresholds (LoadOptions::tuning)
+  int gpu_cores_ = 8;   // gpu_core_count(), for sizing decode attention
   std::map<std::string, id<MTLComputePipelineState>> pipelines_;
 
   GpuLinear embed_, lm_head_, embed_per_layer_, per_layer_model_proj_;

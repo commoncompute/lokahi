@@ -25,6 +25,8 @@
 #include <string_view>
 #include <vector>
 
+#include "model.h"
+
 namespace lokahi {
 
 class Json;
@@ -47,10 +49,11 @@ struct ServiceOptions {
   int max_sequences = 1;         // requests each model runs at once (LoadOptions::max_sequences)
   double text_flush_ms = 50.0;   // coalescing interval for text_delta events
   std::string runtime_revision;  // 64 hex; when set, requests for another revision are rejected
+  Tuning tuning;                 // LoadOptions::tuning
 
   // {"models": [{"id", "revision", "artifact_digest", "adapter_id"?, "directory"}],
   //  "backend"?, "max_context"?, "kv_cache"?, "queue_limit"?, "max_sequences"?, "text_flush_ms"?,
-  //  "runtime_revision"?}
+  //  "runtime_revision"?, "tuning"? (an object of Tuning's fields)}
   static ServiceOptions from_json(const Json& config);
 };
 

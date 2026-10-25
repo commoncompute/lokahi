@@ -217,6 +217,21 @@ def test_service_config_sets_the_kv_cache(native_cli, tiny, tmp_path):
     assert receipt["status"] == "completed" and receipt["output_text"] == text, receipt
 
 
+def test_service_config_sets_the_tuning(native_cli, tiny, tmp_path):
+    # "tuning" reaches the model loader: a field out of range stops the
+    # service from starting, and one in range serves the same greedy text.
+    directory = tiny[0]
+    bad = subprocess.run([str(native_cli), "serve", "--config", str(_config(tmp_path / "bad.json", directory,
+                                                                             tuning={"inflight_steps": 0}))],
+                         input=b"", capture_output=True)
+    assert bad.returncode != 0 and b"tuning: inflight_steps must be in [1, 8]" in bad.stderr
+    _, _, text = _expected_greedy(tiny, 16)
+    server = _serve(native_cli, _config(tmp_path / "c.json", directory, tuning={"inflight_steps": 4},
+                                        text_flush_ms=0), [_start("req-tuned")])
+    receipt = server.streams.receipt("req-tuned")
+    assert receipt["status"] == "completed" and receipt["output_text"] == text, receipt
+
+
 def test_text_is_coalesced_into_few_events(native_cli, tiny, tmp_path):
     server = _serve(native_cli, _config(tmp_path / "c.json", tiny[0], text_flush_ms=60_000), [_start("req-coalesce")])
     deltas = [d for d in server.streams.by_request["req-coalesce"] if d.get("kind") == "text_delta"]

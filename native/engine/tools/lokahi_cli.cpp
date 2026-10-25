@@ -12,6 +12,7 @@
 //   lokahi generate-batch --model DIR --prompts-file F --max-new N [--sequences S] [--out FILE]
 //                                       # each prompt its own sequence, decoded together (greedy)
 //   (every command)   [--sequences S]   # sequences (KV caches) the model holds at once
+//   (every command)   [--tuning F.json]  # Metal dispatch thresholds (Tuning); bench reports them
 //   lokahi image-features --model DIR --images A.ppm[,B.ppm] --out FILE [--backend B]
 //   lokahi image-geometry --model DIR --width W --height H   # the processor's resize target
 //   lokahi sample     --logits-file F.f32 --vocab V [sampling flags] [--steps N] [--first-step S]
@@ -137,6 +138,7 @@ LoadOptions load_options(const Args& args) {
   options.kv_cache = args.get("kv-cache", "auto");
   options.draft_model = args.get("draft-model", "");
   options.max_sequences = args.get_int("sequences", 1);
+  if (args.has("tuning")) options.tuning = tuning_from_json(Json::parse(read_text_file(args.get("tuning"))));
   return options;
 }
 
@@ -762,11 +764,11 @@ int cmd_bench(const Args& args) {
   std::printf(
       "{\"runner\":\"lokahi-native-%s\",\"backend\":\"%s\",\"device\":%s,\"architecture\":\"%s\","
       "\"load_seconds\":%.6f,\"weight_bytes\":%zu,\"prompt_tokens\":%zu,\"output_tokens\":%d,"
-      "\"warmups\":%d,\"repetition_token_invariance\":%s,\"speculation\":%s,\"peak_memory_semantics\":"
-      "\"process peak resident set size\",\"repetitions\":%s}\n",
+      "\"warmups\":%d,\"repetition_token_invariance\":%s,\"speculation\":%s,\"tuning\":%s,"
+      "\"peak_memory_semantics\":\"process peak resident set size\",\"repetitions\":%s}\n",
       model->backend(), model->backend(), json_string(model->device()).c_str(), model->architecture(), load_seconds,
-      model->weight_bytes(),
-      prompt.size(), max_new, warmups, invariant ? "true" : "false", speculated.c_str(), reps.str().c_str());
+      model->weight_bytes(), prompt.size(), max_new, warmups, invariant ? "true" : "false", speculated.c_str(),
+      tuning_to_json(options.tuning).c_str(), reps.str().c_str());
   return invariant && matches_plain ? 0 : 1;
 }
 

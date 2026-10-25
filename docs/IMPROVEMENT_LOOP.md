@@ -59,6 +59,8 @@ these steps:
 | [`benchmarks/attribution.py`](../benchmarks/attribution.py) | Sections ranked by recoverable time, with achieved GB/s against the chip's peak ([bandwidth table](../benchmarks/targets/apple_silicon_memory_bandwidth_v1.json)) | Attribution only |
 | [`benchmarks/scoreboard.py`](../benchmarks/scoreboard.py) | The matrix vs MLX-LM and vs the recorded best; promotion records; the PR comment | Hardware |
 | [`apple-silicon` workflow](../.github/workflows/apple-silicon.yml) | Runs all of it on the self-hosted Mac and posts the comment | Hardware |
+| `python -m lokahi.lab tune` ([`src/lokahi/lab/tune.py`](../src/lokahi/lab/tune.py)) | This chip's Metal dispatch thresholds for one model and workload, judged with the lab protocol | Hardware |
+| [Lōkahi lab](design/MIKI_EMPIRICAL_LOOP.md) (`src/lokahi/lab`) | Paired interleaved statistics, integrity snapshots, candidate worktrees and append-only history for any A/B | Hardware |
 
 **Profiling changes the timing.** In profiling mode the Metal backend ends,
 commits and waits for a command buffer after every section. It reads that
@@ -134,6 +136,37 @@ Expected order of work once the Metal path is verified on hardware
    layout.
 3. **Attention at long context.** The fix is half-precision KV, which halves
    attention traffic.
+
+## Tuning per chip
+
+The Common Compute fleet runs every Apple Silicon generation, and a
+threshold measured on an M1 is not the best one on an M4 Max: core counts,
+caches and the M3+ GPU's dynamic caching move where a kernel wins. So the
+Metal backend's dispatch thresholds are data, not constants
+([engine README](../native/engine/README.md#tuning-per-chip)), and the lab
+searches them per chip:
+
+```sh
+PYTHONPATH=src python -m lokahi.lab tune --engine BUILD/lokahi --model SNAPSHOT \
+  --objective decode --prompt-tokens 512 --max-new 128 --out tuning.json
+```
+
+- **Search.** Coordinate descent over the fields the architecture uses. Each
+  field's grid is screened in one fresh process per value. The best value is
+  then judged against the current tuning.
+- **Judge.** The lab protocol:
+  - fresh processes with 3 warmups;
+  - 10 interleaved pairs in alternating order, and an independent
+    replication of them;
+  - a paired log-ratio bootstrap.
+
+  A value is kept only when both replications clear 2% on the objective, the
+  other phase does not regress past 2%, and greedy tokens are identical.
+- **Safety.** Every value in range is correct: the parity suite runs each
+  range's ends against the oracle. A tuning can only change speed.
+- **Output.** A report (hardware evidence for that chip, model, workload and
+  engine build) and its raw records. The tuning object goes into the
+  service config's `"tuning"` for that machine class.
 
 ## The loop improves itself
 

@@ -13,6 +13,46 @@
 
 namespace lokahi {
 
+class Json;
+
+// The Metal backend's dispatch thresholds: which kernel a pass takes and how
+// attention splits over the GPU. The defaults were measured on an M1; other
+// chips may run faster with others, which `lokahi.lab tune` searches. Every
+// value in range computes the same results up to float rounding order (the
+// parity suites run the range's ends), so tuning changes speed, not output.
+struct Tuning {
+  // From this many tokens (2-9; 9: never) a 4-bit short pass of at most 8
+  // tokens runs qmv_mma (simdgroup matrices) instead of qmv_n. At 2 tokens
+  // qmv_n is as fast on an M1.
+  int qmv_mma_min_rows = 3;
+  // From this many tokens a pass's experts run grouped by expert (moe_sort,
+  // moe_qmm) instead of one matrix-vector product per (token, slot) pair.
+  int moe_grouped_min_tokens = 16;
+  // From this many tokens Gated DeltaNet's rule runs in chunks of 8.
+  int gdn_chunk_min_rows = 16;
+  // From this many tokens attention runs on simdgroup matrices (attn_flash).
+  int attn_mm_min_rows = 16;
+  // Threadgroups per GPU core a decode step's attention aims at, and the
+  // most key blocks it splits into. On an M1, 8 kv heads in 8 key blocks
+  // attended 13-45% faster than in up to 64 blocks of at least 32 keys
+  // (fewer threadgroups spend less on merging partials); 1-2 blocks starved
+  // the GPU.
+  int decode_groups_per_core = 8;
+  int decode_max_blocks = 64;
+  // The most key blocks a longer pass's per-row attention splits into.
+  int prefill_max_blocks = 8;
+  // Fewest keys per block of a latent-attention decode step (attn_flash with
+  // head_rows; each block stages them 8 at a time for a tile's 32 heads).
+  int latent_min_block_keys = 64;
+  // Decode steps encoded ahead of the one being waited on.
+  int inflight_steps = 2;
+};
+
+// Overrides the fields `json` (an object) names; refuses unknown fields and
+// values out of range.
+Tuning tuning_from_json(const Json& json, Tuning base = {});
+std::string tuning_to_json(const Tuning& tuning);
+
 struct LoadOptions {
   std::string backend = "auto";  // auto | cpu | metal
   int max_context = 4096;
@@ -28,6 +68,8 @@ struct LoadOptions {
   // the model holds at once over one copy of the weights (Model::
   // select_sequence, Model::decode_batch). Backends that hold one refuse more.
   int max_sequences = 1;
+  // Dispatch thresholds (Metal); the CPU reference backend ignores them.
+  Tuning tuning;
 };
 
 // One sequence's step of a batched decode: feed `token` at that sequence's
