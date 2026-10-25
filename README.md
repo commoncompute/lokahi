@@ -20,6 +20,45 @@ remain staged work.
 > the distribution and the import package are now `lokahi`; there is no `ollm`
 > alias. Raw evidence recorded before the rename keeps its original identifiers.
 
+## Building in public
+
+Lōkahi is developed in the open at
+[commoncompute/lokahi](https://github.com/commoncompute/lokahi), including
+measured wins, rejected candidates and unfinished architecture work. Common
+Compute is the first integration; publishing an experiment is not a
+provider-app release or production promotion. Start with the
+[build-in-public guide](docs/BUILD_IN_PUBLIC.md).
+
+### Research carried over from Strata's Miki line
+
+These checkpoints were developed on the Miki branch of Strata and are kept
+here with their evidence. They are component-level or synthetic results; none
+establishes a full-model win over MLX-LM on its own.
+
+- **Lōkahi lab** (`src/lokahi/lab`, formerly Miki): a bounded local optimizer
+  with protected correctness/performance gates, isolated candidates in Git
+  worktrees, hashed append-only history and a replaceable proposer/critic. See
+  the [empirical-loop design](docs/design/MIKI_EMPIRICAL_LOOP.md) and the
+  [October 3 validation report](docs/experiments/MIKI_BOOTSTRAP_20261003.md).
+  Run `PYTHONPATH=src python -m lokahi.lab system-info` from a validated
+  environment; do not install dependencies implicitly.
+- **Native session lifecycle** ([native/runtime](native/runtime/README.md)): a
+  bounded C++ owner, C ABI, Python binding, Swift actor and TypeScript metadata
+  codec for admission, FIFO/cancellation and terminal accounting. It is not a
+  model executor. See the
+  [integration boundary](integrations/commoncompute/native-session-v1/README.md)
+  and [validation report](docs/experiments/MIKI_NATIVE_FOUNDATION_20261005.md).
+- **Packed Q4 and fused SwiGLU Metal candidates**, Objective-C direct-ANE
+  probes, C/ARM64 NEON layout kernels and a C++ capacity planner
+  ([bounded native search](docs/design/BOUNDED_ARCHITECTURE_SEARCH.md),
+  [fleet report](docs/experiments/FLEET_NATIVE_OPTIMIZATION_20260907.md),
+  [catalog latency](docs/experiments/CATALOG_NATIVE_LATENCY_20260930.md),
+  [model-connected FFN](docs/experiments/MODEL_CONNECTED_NATIVE_FFN.md)).
+- **Small-family canary ladder** ([design](docs/design/SMALL_FAMILY_CANARIES.md)):
+  `python -m lokahi.lab family-plan [--catalog mlxCatalog.gen.ts]` maps a
+  16 GiB M1 test scope onto Common Compute's pinned catalog without
+  downloading weights or editing Common Compute.
+
 ## Current verified baseline
 
 The offline test suite and serialized local M1 probes currently verify:
@@ -62,16 +101,22 @@ correctness baseline.
 | `gpt-oss-20B`, `gpt-oss-120B` | Manifest and planning targets; full MXFP4 execution is not implemented |
 
 The following remain targets rather than shipped capabilities: a persistent
-production XPC server, multi-request continuous batching, complete native
-Metal/ANE model execution, production SSD paging, and the separate
-`lokahi_llm` distribution.
+production XPC server, fleet qualification of multi-request batching
+(`max_sequences`), complete native Metal/ANE model execution, production SSD
+paging, and the separate `lokahi_llm` distribution.
 
-> Storage boundary: `/Volumes/Tyler HDD` is the source checkout, not an SSD.
-> Lōkahi must not use it for SSD offload, SSD benchmarking, or model/cache
-> placement intended to represent SSD behavior. SSD experiments require a
-> separate destination approved by the user.
+> Storage boundary: the original external HDD failed; do not access it or
+> follow preserved symlinks to it. `/Volumes/Tyler HDD 6TB` holds source
+> checkouts and cold archives only. It is an HDD: never use it for SSD offload,
+> SSD benchmarking, or model/cache placement intended to represent SSD
+> behavior. Active builds, model weights and SQLite stay on the internal SSD.
+> Other contributors select their own model/cache locations.
 
 ## Architecture direction
+
+This diagram describes the target topology, not a claim that each path is a
+production implementation. The current native session owner is CPU metadata
+control; native GPU and ANE components remain separately qualified experiments.
 
 ```mermaid
 flowchart TD

@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["hypotheses", "evidence_limits"],
+  "properties": {
+    "hypotheses": {
+      "type": "array", "minItems": 1, "maxItems": 3,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["title", "mechanism", "affected_code", "expected_benefit", "downside", "conditions", "experiment", "mode", "discard", "critique"],
+        "properties": {
+          "title": {"type": "string"},
+          "mechanism": {"type": "string"},
+          "affected_code": {"type": "string", "enum": ["miki_candidate.json"]},
+          "expected_benefit": {"type": "string"},
+          "downside": {"type": "string"},
+          "conditions": {"type": "string"},
+          "experiment": {"type": "string"},
+          "mode": {"type": "string", "enum": ["compile_decode", "compile_prefill", "compile_both"]},
+          "discard": {"type": "boolean"},
+          "critique": {"type": "string"}
+        }
+      }
+    },
+    "evidence_limits": {"type": "array", "items": {"type": "string"}}
+  }
+}
