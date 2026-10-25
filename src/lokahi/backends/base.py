@@ -1,4 +1,4 @@
-"""Backend abstraction primitives for oLLM."""
+"""Backend abstraction primitives for Lōkahi."""
 from __future__ import annotations
 
 from dataclasses import dataclass

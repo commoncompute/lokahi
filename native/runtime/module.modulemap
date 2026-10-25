@@ -1,0 +1,4 @@
+module StrataSession {
+    header "strata_session.h"
+    export *
+}

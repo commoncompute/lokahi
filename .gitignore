@@ -12,3 +12,11 @@ src/lokahi.egg-info
 animations/rendered/
 native/engine/build/
 native/*/build/
+
+# Internal-SSD recovery tooling; never stage packages or interpreter binaries.
+/.venv/
+/.cache/
+/.local/
+
+# Unreviewed historical recovery candidates stay local until individually audited.
+/recovery/
